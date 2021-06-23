@@ -56,6 +56,9 @@ def grow_spheres(
     elif void_centres == 'uniform':
         ncentres = len(data)
         centres = tesselation.get_random_centres(ncentres, box_size)
+    else:
+        raise ValueError('void_centres should be either '
+                         '"uniform" or "delaunay".')
     utilities.save_as_unformatted(centres, centres_filename)
 
     # grow spheres around centres
@@ -86,5 +89,28 @@ def grow_spheres(
                            'Check log file for further information.')
 
     voids = np.genfromtxt(voids_filename)
+
+    return voids
+
+
+def sort_spheres(voids_filename, radius_col=3):
+    '''
+    Sort an input void catalogue in
+    decreasing order of radius.
+
+    Parameters:  voids_filename: str
+                 Name of the void catalogue file.
+
+                 radius_col: int
+                 Index of the column containing the void
+                 radius.
+    '''
+
+    voids = np.genfromtxt(voids_filename)
+    voids = voids[np.argsort(voids[:, radius_col])]
+    voids = voids[::-1]
+
+    fmt = 4*'%10.3f ' + '%10i ' + '%10.3f '
+    np.savetxt(voids_filename, voids, fmt=fmt)
 
     return voids
