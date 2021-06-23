@@ -86,6 +86,7 @@ PROGRAM grow_spheres
   rwidth = rvoidmax / nrbin
   rvoidmax2 = rvoidmax ** 2
   nv = 0
+  voids = 0
 
 
   write(*,*) ndif, rwidth, rvoidmax2, rho_mean, rgrid, ng, nc
@@ -166,12 +167,12 @@ PROGRAM grow_spheres
       ng = int(cum_rbin(ii))
       if (nden .lt. delta * rho_mean .and. ng .gt. 0) then
 	nv = nv + 1
-	voids(1, nv) = centres(1, i)
-	voids(2, nv) = centres(2, i)
-	voids(3, nv) = centres(3, i)
-	voids(4, nv) = rvoid
-	voids(5, nv) = ng
-	voids(6, nv) = nden / rho_mean
+	voids(1, i) = centres(1, i)
+	voids(2, i) = centres(2, i)
+	voids(3, i) = centres(3, i)
+	voids(4, i) = rvoid
+	voids(5, i) = ng
+	voids(6, i) = nden / rho_mean
 	exit
       end if
     end do
@@ -182,9 +183,11 @@ PROGRAM grow_spheres
   deallocate(centres)
 
   open(12, file=output_voids, status='unknown')
-  do i = 1, nv
-    write(12, '(4F10.3, 1I10, 1F10.3)') voids(1, i), voids(2, i),&
-    voids(3, i), voids(4, i), int(voids(5, i)), voids(6, i)
+  do i = 1, nc
+    if (voids(4, i) .ne. 0) then
+      write(12, '(4F10.3, 1I10, 1F10.3)') voids(1, i), voids(2, i),&
+      voids(3, i), voids(4, i), int(voids(5, i)), voids(6, i)
+    end if
   end do
 
   write(*,*) ''
