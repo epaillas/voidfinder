@@ -93,10 +93,9 @@ PROGRAM grow_spheres
   call OMP_SET_NUM_THREADS(nthreads)
   write(*, *) 'Maximum number of threads: ', OMP_GET_MAX_THREADS()
 
-  ! PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, rbin, cum_rbin,&
-  !ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, vol,&
-  ! nden, ng)
-  ! Need to do reduction of nv
+  !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, rbin, cum_rbin,&
+  !$OMP ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, vol,&
+  !$OMP nden, ng) REDUCTION(+:nv) 
   do i = 1, nc
 
     rbin = 0
@@ -177,7 +176,7 @@ PROGRAM grow_spheres
       end if
     end do
   end do
-
+  !$OMP END PARALLEL DO
 
   deallocate(tracers)
   deallocate(centres)
