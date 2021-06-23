@@ -150,3 +150,24 @@ def get_periodic_images(data, box_size):
 
     images = np.asarray(images)
     return images
+
+
+def get_random_centres(ncentres, box_size):
+    '''
+    Generates random centres within the simulation
+    volume following a uniform distribution.
+
+    Parameters:  ncentres: int
+                 Number of random centres.
+
+                 box_size: float
+                 Size of the simulation box
+    '''
+
+    xpos = np.random.uniform(0, box_size, ncentres)
+    ypos = np.random.uniform(0, box_size, ncentres)
+    zpos = np.random.uniform(0, box_size, ncentres)
+
+    centres = np.c_[xpos, ypos, zpos]
+
+    return centres

@@ -1,13 +1,13 @@
 import subprocess
 from os import path
 import numpy as np
-from . import utilities, tesselation 
+from . import utilities, tesselation
 
 
 def grow_spheres(
     tracers_filename, handle, box_size,
     density_threshold, ngrid, rvoid_max=100,
-    nthreads=1
+    nthreads=1, void_centres='uniform'
 ):
     '''
     First step of the spherical void finder. Grows spheres
@@ -34,6 +34,10 @@ def grow_spheres(
 
                  nthreads: int
                  Number of threads to speed up calculations (defaults to 1).
+
+                 void_centres: str
+                 How to sample prospective void centres: "uniform" or
+                 "delaunay".
                  '''
 
     # check if files exist
@@ -41,18 +45,19 @@ def grow_spheres(
         if not path.isfile(fname):
             raise FileNotFoundError('{} does not exist.'.format(fname))
 
-    print('Finding centres...')
+    # read tracers
+    data, *_ = utilities.read_unformatted(tracers_filename)
+
     # get prospective void centres
     centres_filename = f'{handle}_centres.unf'
-    data, *_ = utilities.read_unformatted(tracers_filename)
-    vertices = tesselation.delaunay_triangulation(data, box_size)
-    centres = tesselation.get_circumcentres(vertices, box_size)
+    if void_centres == 'delaunay':
+        vertices = tesselation.delaunay_triangulation(data, box_size)
+        centres = tesselation.get_circumcentres(vertices, box_size)
+    elif void_centres == 'uniform':
+        ncentres = len(data)
+        centres = tesselation.get_random_centres(ncentres, box_size)
     utilities.save_as_unformatted(centres, centres_filename)
 
-    print(f'len(vertices): {len(vertices)}')
-    print(f'len(centres): {len(centres)}')
-
-    print('Growing spheres...')
     # grow spheres around centres
     binpath = path.join(path.dirname(__file__),
                         'bin', 'grow_spheres.exe')
@@ -83,4 +88,3 @@ def grow_spheres(
     voids = np.genfromtxt(voids_filename)
 
     return voids
-
