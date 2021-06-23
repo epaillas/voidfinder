@@ -10,15 +10,18 @@ import sys
 from shutil import rmtree
 
 from setuptools import find_packages, setup, Command
+from setuptools.command.build_ext import build_ext
+import distutils.command.build
+import subprocess
 
 # Package meta-data.
 NAME = 'voidfinder'
-DESCRIPTION = 'Spherical Void finding algorithm for cosmology'
+DESCRIPTION = 'Redshift-space distortions with split densities'
 URL = 'https://github.com/epaillas/voidfinder'
 EMAIL = 'epaillas@astro.puc.cl'
 AUTHOR = 'Enrique Paillas'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.1.0'
+VERSION = '0.2.3'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
@@ -92,6 +95,18 @@ class UploadCommand(Command):
         sys.exit()
 
 
+class BuildCommand(distutils.command.build.build):
+  """Customized setuptools build command - builds protos on build."""
+  def run(self):
+    distutils.command.build.build.run(self)
+    command = "cd voidfinder/box"
+    command += " && make"
+    #command += " && cd ../survey"
+    #command += " && make"
+    process = subprocess.Popen(command, shell=True)
+    process.wait()
+
+
 # Where the magic happens:
 setup(
     name=NAME,
@@ -113,6 +128,7 @@ setup(
     install_requires=REQUIRED,
     extras_require=EXTRAS,
     include_package_data=True,
+    has_ext_modules=lambda: True,
     license='MIT',
     classifiers=[
         # Trove classifiers
@@ -126,6 +142,7 @@ setup(
     ],
     # $ setup.py publish support.
     cmdclass={
+        'build': BuildCommand,
         'upload': UploadCommand,
     },
 )

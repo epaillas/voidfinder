@@ -77,6 +77,9 @@ PROGRAM grow_spheres
   call read_unformatted(input_tracers, tracers, weight_tracers, ng, has_velocity_tracers)
   call read_unformatted(input_centres, centres, weight_centres, nc, has_velocity_centres)
   allocate(voids(6, nc))
+  allocate(ll(ng))
+  allocate(lirst(ngrid, ngrid, ngrid))
+  call linked_list(tracers, boxsize, ngrid, ll, lirst, rgrid)
 
   rho_mean = ng * 1./(boxsize ** 3)
   ndif = int(rvoidmax / rgrid + 1)
@@ -84,16 +87,16 @@ PROGRAM grow_spheres
   rvoidmax2 = rvoidmax ** 2
   nv = 0
 
-  allocate(ll(ng))
-  allocate(lirst(ngrid, ngrid, ngrid))
-  call linked_list(tracers, boxsize, ngrid, ll, lirst, rgrid)
+
+  write(*,*) ndif, rwidth, rvoidmax2, rho_mean, rgrid, ng, nc
 
   call OMP_SET_NUM_THREADS(nthreads)
   write(*, *) 'Maximum number of threads: ', OMP_GET_MAX_THREADS()
 
-  !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, rbin, cum_rbin,&
-  !$OMP ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, vol,&
-  !$OMP nden, ng)
+  ! PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, rbin, cum_rbin,&
+  !ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, vol,&
+  ! nden, ng)
+  ! Need to do reduction of nv
   do i = 1, nc
 
     rbin = 0
@@ -102,6 +105,7 @@ PROGRAM grow_spheres
     ipx = int(centres(1, i) / rgrid + 1)
     ipy = int(centres(2, i) / rgrid + 1)
     ipz = int(centres(3, i) / rgrid + 1)
+
 
     do ix = ipx - ndif, ipx + ndif, 1
       do iy = ipy - ndif, ipy + ndif, 1
@@ -137,7 +141,6 @@ PROGRAM grow_spheres
 	      if (disz .gt. boxsize/2) disz = disz - boxsize
 
 	      dis2 = disx ** 2 + disy ** 2 + disz ** 2
-
 	      if (dis2 .lt. rvoidmax2) then
 		dis = sqrt(dis2)
 		rind = int(dis / rwidth + 1)
@@ -164,16 +167,17 @@ PROGRAM grow_spheres
       ng = int(cum_rbin(ii))
       if (nden .lt. delta * rho_mean .and. ng .gt. 0) then
 	nv = nv + 1
-	voids(1, i) = centres(1, i)
-	voids(2, i) = centres(2, i)
-	voids(3, i) = centres(3, i)
-	voids(4, i) = rvoid
-	voids(5, i) = ng
-	voids(6, i) = nden / rho_mean
+	voids(1, nv) = centres(1, i)
+	voids(2, nv) = centres(2, i)
+	voids(3, nv) = centres(3, i)
+	voids(4, nv) = rvoid
+	voids(5, nv) = ng
+	voids(6, nv) = nden / rho_mean
 	exit
       end if
     end do
   end do
+
 
   deallocate(tracers)
   deallocate(centres)

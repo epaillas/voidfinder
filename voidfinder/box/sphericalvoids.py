@@ -1,32 +1,12 @@
-import sys
 import subprocess
 from os import path
 import numpy as np
-from scipy.spatial import Delaunay
-
-def delaunay_triangulation(
-    tracers_filename, box_size
-):
-    '''
-    Make a Delaunay triangulation over
-    the cartesian positions of the tracers.
-    Returns the vertices of tetrahedra.
-    '''
-
-    # add periodic images
-    images = get_periodic_images(data)
-    data = np.vstack([data, images])
-
-    triangulation = Delaunay(data)
-    simplices = triangulation.simplices.copy()
-    vertices = data[simplices]
-    print('{} vertices found.'.format(len(vertices)))
-    return vertices
+from . import utilities, tesselation 
 
 
 def grow_spheres(
-    centres_filename, tracers_filename, output_filename,
-    box_size, density_threshold, ngrid, rvoid_max=100
+    tracers_filename, handle, box_size,
+    density_threshold, ngrid, rvoid_max=100,
     nthreads=1
 ):
     '''
@@ -45,7 +25,7 @@ def grow_spheres(
 
                  box_size: float
                  Size of the simulation box.
-                 
+
                  density_threshold: float
                  Density threshold, in units of the mean density (e.g. 0.2).
 
@@ -57,101 +37,50 @@ def grow_spheres(
                  '''
 
     # check if files exist
-    for fname in [centres_filename, tracers_filename]:
+    for fname in [tracers_filename]:
         if not path.isfile(fname):
             raise FileNotFoundError('{} does not exist.'.format(fname))
-    
+
+    print('Finding centres...')
+    # get prospective void centres
+    centres_filename = f'{handle}_centres.unf'
+    data, *_ = utilities.read_unformatted(tracers_filename)
+    vertices = tesselation.delaunay_triangulation(data, box_size)
+    centres = tesselation.get_circumcentres(vertices, box_size)
+    utilities.save_as_unformatted(centres, centres_filename)
+
+    print(f'len(vertices): {len(vertices)}')
+    print(f'len(centres): {len(centres)}')
+
+    print('Growing spheres...')
+    # grow spheres around centres
     binpath = path.join(path.dirname(__file__),
-    'bin', 'grow_spheres.exe')
+                        'bin', 'grow_spheres.exe')
+
+    voids_filename = f'{handle}_voids.dat'
 
     cmd = [
+        binpath,
         tracers_filename,
         centres_filename,
-        output_filename,
+        voids_filename,
         str(box_size),
         str(density_threshold),
         str(rvoid_max),
+        str(ngrid),
         str(nthreads)
     ]
 
-    log_filename = '{}.log'.format(output_filename)
+    log_filename = f'{handle}_growspheres.log'.format(handle)
     log = open(log_filename, 'w+')
 
     return_code = subprocess.call(cmd, stdout=log, stderr=log)
 
     if return_code:
-        raise RuntimeError('grow_spheres.exe failed. "
-                           "Check log file for further information.')
-        
-    voids = np.genfromtxt(output_filename)
+        raise RuntimeError('grow_spheres.exe failed. '
+                           'Check log file for further information.')
+
+    voids = np.genfromtxt(voids_filename)
 
     return voids
 
-
-def get_periodic_images(data, box_size):
-    '''
-    Find the relevant images of a
-    set of points in a box that
-    has boundary conditions.
-    '''
-    images = []
-    buffer = box_size / 10  # probably an overkill
-
-    for point in data:
-        condx = ((box_size - buffer) <
-                 point[0]) or (point[0] < buffer)
-        condy = ((box_size - buffer) <
-                 point[1]) or (point[1] < buffer)
-        condz = ((box_size - buffer) <
-                 point[2]) or (point[2] < buffer)
-
-        if condx and condy and condz:
-            shiftx = point[0] + \
-                np.copysign(box_size, (buffer - point[0]))
-            shifty = point[1] + \
-                np.copysign(box_size, (buffer - point[1]))
-            shiftz = point[2] + \
-                np.copysign(box_size, (buffer - point[2]))
-            images.append([shiftx, shifty, shiftz])
-        if condx and condy:
-            shiftx = point[0] + \
-                np.copysign(box_size, (buffer - point[0]))
-            shifty = point[1] + \
-                np.copysign(box_size, (buffer - point[1]))
-            shiftz = point[2]
-            images.append([shiftx, shifty, shiftz])
-        if condx and condz:
-            shiftx = point[0] + \
-                np.copysign(box_size, (buffer - point[0]))
-            shifty = point[1]
-            shiftz = point[2] + \
-                np.copysign(box_size, (buffer - point[2]))
-            images.append([shiftx, shifty, shiftz])
-        if condy and condz:
-            shiftx = point[0]
-            shifty = point[1] + \
-                np.copysign(box_size, (buffer - point[1]))
-            shiftz = point[2] + \
-                np.copysign(box_size, (buffer - point[2]))
-            images.append([shiftx, shifty, shiftz])
-        if condx:
-            shiftx = point[0] + \
-                np.copysign(box_size, (buffer - point[0]))
-            shifty = point[1]
-            shiftz = point[2]
-            images.append([shiftx, shifty, shiftz])
-        if condy:
-            shiftx = point[0]
-            shifty = point[1] + \
-                np.copysign(box_size, (buffer - point[1]))
-            shiftz = point[2]
-            images.append([shiftx, shifty, shiftz])
-        if condz:
-            shiftx = point[0]
-            shifty = point[1]
-            shiftz = point[2] + \
-                np.copysign(box_size, (buffer - point[2]))
-            images.append([shiftx, shifty, shiftz])
-
-    images = np.asarray(images)
-    return images
