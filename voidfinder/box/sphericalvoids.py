@@ -5,9 +5,9 @@ from . import utilities, tesselation
 
 
 def grow_spheres(
-    tracers_filename, handle, box_size,
-    density_threshold, ngrid, rvoid_max=100,
-    nthreads=1, void_centres='uniform'
+        tracers_filename, handle, box_size,
+        density_threshold, ngrid, rvoid_max=100,
+        nthreads=1, void_centres='uniform'
 ):
     '''
     First step of the spherical void finder. Grows spheres
@@ -112,5 +112,51 @@ def sort_spheres(voids_filename, radius_col=3):
 
     fmt = 4*'%10.3f ' + '%10i ' + '%10.3f '
     np.savetxt(voids_filename, voids, fmt=fmt)
+
+    return voids
+
+
+def overlapping_filter(
+        voids_filename,
+        handle,
+        box_size, ngrid,
+        overlap_factor=0.5
+):
+    '''
+    Removes overlapping spheres from a void catalogue.
+    If the catalogue is not sorted by decreasing void
+    radius, the sort_spheres function is applied first.
+
+    Parameters:  voids_filename: str
+                 Name of the void catalogue file.
+
+                 overlap_factor: float
+                 The overlap fraction that should be allowed.
+                 Defaults to 0.5.
+    '''
+
+    binpath = path.join(path.dirname(__file__),
+                        'bin', 'overlapping.exe')
+
+    output_filename = f'{handle}_voids_overlap{overlap_factor}.dat'
+
+    cmd = [
+        binpath,
+        voids_filename,
+        output_filename,
+        str(box_size),
+        str(overlap_factor),
+        str(ngrid)]
+
+    log_filename = f'{handle}_overlapping.log'.format(handle)
+    log = open(log_filename, 'w+')
+
+    return_code = subprocess.call(cmd, stdout=log, stderr=log)
+
+    if return_code:
+        raise RuntimeError('overlapping.exe failed. '
+                           'Check log file for further information.')
+
+    voids = np.genfromtxt(output_filename)
 
     return voids
