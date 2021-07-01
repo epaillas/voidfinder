@@ -13,4 +13,6 @@ Requirements:
 
 Earlier versions of those software packages might work as well, but they have not been tested.
 
+Examples of the usage of the package can be found under the `examples/` directory.
+
 
