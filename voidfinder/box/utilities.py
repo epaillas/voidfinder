@@ -39,3 +39,38 @@ def save_as_unformatted(data, filename):
     f.write_record(ncols)
     f.write_record(data)
     f.close()
+
+
+def get_divisors(n):
+    '''
+    Returns a list of divisors of a number,
+
+    Parameters:  n: int
+                 Number to find divisors from.
+    '''
+    res = [] 
+    i = 1
+    while i <= n : 
+        if (n % i==0) : 
+            res.append(i), 
+        i = i + 1
+    return res
+
+def get_closest_divisor(n, close_to=100):
+    '''
+    Find the divisor of a number that is 
+    closest to a given value.
+
+    Parameters:  n: int
+                 Number to find the divisor from.
+
+                 close_to: int
+                 Value to which the divisor should be close.
+                 '''
+    all_divisors = get_divisors(n)
+    for ix, val in enumerate(all_divisors):
+        if close_to < val:
+            if ix == 0: return val
+            if (val-close_to)>(close_to - all_divisors[ix-1]):
+                return all_divisors[ix-1]
+            return val

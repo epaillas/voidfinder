@@ -6,7 +6,7 @@ from . import utilities, tesselation
 
 def grow_spheres(
         tracers_filename, handle, box_size,
-        density_threshold, ngrid, rvoid_max=100,
+        density_threshold, ngrid=None, rvoid_max=100,
         nthreads=1, void_centres='uniform',
         ncentres=None,
 ):
@@ -29,6 +29,10 @@ def grow_spheres(
 
                  density_threshold: float
                  Density threshold, in units of the mean density (e.g. 0.2).
+
+                 ngrid: int
+                 Number of cells along 1D for the linked lists. If None,
+                 the divisor of box_size that is closest to 100 is used.
 
                  rvoid_max: float
                  Maxiumum radius a void can have (defaults to 100 Mpc/h).
@@ -55,13 +59,22 @@ def grow_spheres(
         vertices = tesselation.delaunay_triangulation(data, box_size)
         centres = tesselation.get_circumcentres(vertices, box_size)
     elif void_centres == 'uniform':
-        if ncentres == None:
+        if ncentres is None:
             ncentres = len(data)
         centres = tesselation.get_random_centres(ncentres, box_size)
     else:
         raise ValueError('void_centres should be either '
                          '"uniform" or "delaunay".')
     utilities.save_as_unformatted(centres, centres_filename)
+
+    # figure out size of linked list
+    if ngrid is None:
+        ngrid = utilities.get_closest_divisor(box_size, 100)
+    else:
+        if type(ngrid) != int:
+            raise ValueError('ngrid needs to be an integer.')
+        if box_size % ngrid != 0:
+            raise ValueError('ngrid needs to be a divisor of box_size.')
 
     # grow spheres around centres
     binpath = path.join(path.dirname(__file__),
