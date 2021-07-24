@@ -7,7 +7,8 @@ from . import utilities, tesselation
 def grow_spheres(
         tracers_filename, handle, box_size,
         density_threshold, ngrid, rvoid_max=100,
-        nthreads=1, void_centres='uniform'
+        nthreads=1, void_centres='uniform',
+        ncentres=None,
 ):
     '''
     First step of the spherical void finder. Grows spheres
@@ -54,7 +55,8 @@ def grow_spheres(
         vertices = tesselation.delaunay_triangulation(data, box_size)
         centres = tesselation.get_circumcentres(vertices, box_size)
     elif void_centres == 'uniform':
-        ncentres = len(data)
+        if ncentres == None:
+            ncentres = len(data)
         centres = tesselation.get_random_centres(ncentres, box_size)
     else:
         raise ValueError('void_centres should be either '
