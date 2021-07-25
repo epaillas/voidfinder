@@ -7,8 +7,8 @@ from . import utilities, tesselation
 def grow_spheres(
         tracers_filename, handle, box_size,
         density_threshold, ngrid=None, rvoid_max=100,
-        nthreads=1, void_centres='uniform',
-        ncentres=None, use_weights=False
+        nthreads=1, void_centres='uniform', ncentres=None,
+        use_weights=False, file_format='ascii'
 ):
     '''
     First step of the spherical void finder. Grows spheres
@@ -45,7 +45,12 @@ def grow_spheres(
                  "delaunay".
 
                  use_weights: boolean
-                 Whether to use weights during pair counting. Defaults to False.
+                 Whether to use weights during pair counting. Defaults to
+                 False.
+
+                 file_format: str
+                 'ascii' for a text csv file, or 'unformatted' for a binary
+                 Fortran 90 file.
                  '''
 
     # check if files exist
@@ -72,6 +77,11 @@ def grow_spheres(
         raise ValueError('void_centres should be either '
                          '"uniform" or "delaunay".')
     utilities.save_as_unformatted(centres, centres_filename)
+
+    # figure out file format
+    if file_format not in ['ascii', 'unformatted']:
+        raise ValueError('File format has to be either '
+                         '"ascii" or "unformatted".')
 
     # figure out size of linked list
     if ngrid is None:
@@ -103,7 +113,8 @@ def grow_spheres(
         str(rvoid_max),
         str(ngrid),
         str(nthreads),
-        str(use_weights)
+        str(use_weights,
+        file_format)
     ]
 
     log_filename = f'{handle}_growspheres.log'.format(handle)
