@@ -77,6 +77,7 @@ PROGRAM grow_spheres
 
     ! figure out file type for tracers
     inquire(file=input_tracers, form=file_format)
+    write(*,*) file_format
     if (file_format == 'FORMATTED') then
         write(*,*) 'input_tracers is formatted'
         if (use_weights == 1) then
