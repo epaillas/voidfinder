@@ -96,14 +96,14 @@ PROGRAM grow_spheres
     ! figure out file type for centres
     inquire(file=input_centres, form=file_format)
     if (file_format == 'FORMATTED') then
-        write(*,*) 'input_tracers is formatted'
+        write(*,*) 'input_centres is formatted'
         if (use_weights == 1) then
             call read_catalogue_type2(input_centres, centres, weight_centres, nc)
         else
             call read_catalogue_type1(input_centres, centres, weight_centres, nc)
         end if
     else
-        write(*,*) 'input_tracers is unformatted'
+        write(*,*) 'input_centres is unformatted'
         if (use_weights == 1) then
             call read_catalogue_type6(input_centres, centres, weight_centres, nc)
         else

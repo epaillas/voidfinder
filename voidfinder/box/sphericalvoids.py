@@ -54,7 +54,10 @@ def grow_spheres(
             raise FileNotFoundError('{} does not exist.'.format(fname))
 
     # read tracers
-    data, *_ = utilities.read_unformatted(tracers_filename)
+    try:
+        data, *_ = utilities.read_unformatted(tracers_filename)
+    except Exception:
+        data = np.genfromtxt(tracers_filename)
 
     # get prospective void centres
     centres_filename = f'{handle}_centres.unf'
