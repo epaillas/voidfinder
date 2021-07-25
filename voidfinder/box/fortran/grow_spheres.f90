@@ -24,7 +24,7 @@ PROGRAM grow_spheres
 
   character(len=500) :: input_tracers, input_centres, output_voids
   character(len=10) :: box_char, rvoidmax_char, delta_char, ngrid_char
-  character(len=10) :: nthreads_char, use_weights_char, file_format
+  character(len=10) :: nthreads_char, use_weights_char, unf
   character(len=1)  :: creturn = achar(13)
 
 
@@ -76,9 +76,9 @@ PROGRAM grow_spheres
 
 
     ! figure out file type for tracers
-    inquire(file=input_tracers, form=file_format)
-    write(*,*) file_format
-    if (file_format == 'FORMATTED') then
+    inquire(file=input_tracers, unformatted=unf)
+    write(*,*) unf
+    if (unf == 'NO') then
         write(*,*) 'input_tracers is formatted'
         if (use_weights == 1) then
             call read_catalogue_type2(input_tracers, tracers, weight_tracers, ng)
@@ -95,8 +95,8 @@ PROGRAM grow_spheres
     end if
 
     ! figure out file type for centres
-    inquire(file=input_centres, form=file_format)
-    if (file_format == 'FORMATTED') then
+    inquire(file=input_centres, form=unf)
+    if (unf == 'NO') then
         write(*,*) 'input_centres is formatted'
         if (use_weights == 1) then
             call read_catalogue_type2(input_centres, centres, weight_centres, nc)
