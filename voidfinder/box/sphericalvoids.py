@@ -114,7 +114,7 @@ def grow_spheres(
         str(ngrid),
         str(nthreads),
         str(use_weights),
-        file_format)
+        file_format
     ]
 
     log_filename = f'{handle}_growspheres.log'.format(handle)
