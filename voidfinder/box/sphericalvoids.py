@@ -8,7 +8,7 @@ def grow_spheres(
         tracers_filename, handle, box_size,
         density_threshold, ngrid=None, rvoid_max=100,
         nthreads=1, void_centres='uniform',
-        ncentres=None,
+        ncentres=None, use_weights=False
 ):
     '''
     First step of the spherical void finder. Grows spheres
@@ -43,6 +43,9 @@ def grow_spheres(
                  void_centres: str
                  How to sample prospective void centres: "uniform" or
                  "delaunay".
+
+                 use_weights: boolean
+                 Whether to use weights during pair counting. Defaults to False.
                  '''
 
     # check if files exist
@@ -82,6 +85,11 @@ def grow_spheres(
 
     voids_filename = f'{handle}_voids.dat'
 
+    if use_weights is True:
+        use_weights = 1
+    else:
+        use_weights = 0
+
     cmd = [
         binpath,
         tracers_filename,
@@ -91,7 +99,8 @@ def grow_spheres(
         str(density_threshold),
         str(rvoid_max),
         str(ngrid),
-        str(nthreads)
+        str(nthreads),
+        str(use_weights)
     ]
 
     log_filename = f'{handle}_growspheres.log'.format(handle)

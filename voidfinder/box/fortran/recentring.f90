@@ -1,164 +1,112 @@
-module procedures
-  implicit none
-contains
-
-  subroutine linked_list(ngrid, rgrid, ll, lirst, pos_data)
-    implicit none
-    integer :: i, ng, ipx, ipy, ipz
-    real*8, intent(in) :: rgrid
-    integer, intent(in) :: ngrid
-    real*8, dimension(:,:), intent(in) :: pos_data
-    integer, dimension(:,:,:), intent(out) :: lirst
-    integer, dimension(:), intent(out) :: ll
-
-    ng = size(pos_data, dim=2)
-    lirst = 0
-    ll = 0
-    do i = 1, ng
-      ipx = int(pos_data(1, i) / rgrid + 1.)
-      ipy = int(pos_data(2, i) / rgrid + 1.)
-      ipz = int(pos_data(3, i) / rgrid + 1.)
-      if(ipx.gt.0.and.ipx.le.ngrid.and.ipy.gt.0.and.ipy.le.ngrid.and.&
-      ipz.gt.0.and.ipz.le.ngrid) lirst(ipx, ipy, ipz) = i
-    end do
-
-    do i = 1, ng
-      ipx = int(pos_data(1, i) / rgrid + 1.)
-      ipy = int(pos_data(2, i) / rgrid + 1.)
-      ipz = int(pos_data(3, i) / rgrid + 1.)
-
-      if (ipx.gt.0.and.ipx.le.ngrid.and.ipy.gt.0.and.ipy.le.ngrid.and.ipz&
-      &.gt.0.and.ipz.le.ngrid) then
-        ll(lirst(ipx, ipy, ipz)) = i
-        lirst(ipx, ipy, ipz) = i
-      endif
-    end do
-
-  end subroutine linked_list
-
-  character(len=20) function str(k)
-    implicit none
-    integer*4, intent(in) :: k
-    write(str, *) k
-    str = adjustl(str)
-  end function str
-
-
-end module procedures
-
-
 PROGRAM recentering
-  use mpi
-  use procedures
-  implicit none
+    use OMP_LIB
+    use procedures
+    implicit none
 
-  real*8 :: boxsize, delta, rgrid, rho_mean, nden
-  real*8 :: px, py, pz, disx, disy, disz, dis
-  real*8 :: pxr, pyr, pzr, rvoidr
-  real*8 :: rvoid, rwidth, rvoidmax
-  real*8 :: rnd, rnd_phi, rnd_theta, rnd_rvoid
-  real*8 :: rnd_px, rnd_py, rnd_pz, rnd_ng, rnd_nden
-  real*8 :: pi = 4.*atan(1.)
+    real*8 :: boxsize, delta, rgrid, mean_density, nden
+    real*8 :: px, py, pz, disx, disy, disz, dis, dis2
+    real*8 :: pxr, pyr, pzr, rvoidr, box2
+    real*8 :: rvoid, rwidth, rvoidmax, rvoidmax2
+    real*8 :: rnd, rnd_phi, rnd_theta, rnd_rvoid, rnd_vol
+    real*8 :: rnd_px, rnd_py, rnd_pz, rnd_ng, rnd_nden
+    real*8 :: pi = 4.*atan(1.)
 
-  integer :: ng, nc, nv, rind, stuck, nrows, ncols
-  integer :: id, ierr, process_num, iargc, filenumber
-  integer :: i, j, k, ii, ix, iy, iz, ix2, iy2, iz2
-  integer :: ipx, ipy, ipz, ndif, ngrid
-  integer, parameter ::  nrbin = 1000, nrc = 128
+    integer*8 :: ng, nc, nv, rind, stuck, nrows, ncols
+    integer*8 :: id, ierr, process_num, iargc, filenumber
+    integer*8 :: i, j, k, ii, ix, iy, iz, ix2, iy2, iz2
+    integer*8 :: ipx, ipy, ipz, ndif, ngrid, use_weights
+    integer*8, parameter ::  nrbin = 1000, nrc = 128
+    integer*4 :: nthreads
 
-  integer, dimension(:,:,:), allocatable :: lirst
-  integer, dimension(:), allocatable :: ll
+    integer*8, dimension(:,:,:), allocatable :: lirst
+    integer*8, dimension(:), allocatable :: ll
 
-  real*8, allocatable, dimension(:,:)  :: pos_data
-  real*8, dimension(nrbin) :: rbin, cum_rbin
+    real*8, allocatable, dimension(:,:)  :: tracers, voids
+    real*8, allocatable, dimension(:) :: weight_tracers
+    real*8, dimension(nrbin) :: rbin, cum_rbin
 
-  character(len=500) :: input_tracers, input_centres, output_voids
-  character(len=10) :: box_char, rvoidmax_char, delta_char, ngrid_char
-  character(len=1)  :: creturn = achar(13)
+    character(len=500) :: input_tracers, input_centres, output_voids
+    character(len=10) :: box_char, rvoidmax_char, delta_char, ngrid_char
+    character(len=10) :: nthreads_char, use_weights_char
+    character(len=1)  :: creturn = achar(13)
 
-  call MPI_Init(ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, process_num, ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, id, ierr)
-
-
-  if (iargc() .ne. 7) then
-    if (id == 0) write(*,*) 'recentering.exe: some parameters are missing.'
-    if (id == 0) write(*,*) ''
-    if (id == 0) write(*,*) '1) input_tracers'
-    if (id == 0) write(*,*) '2) input_centres'
-    if (id == 0) write(*,*) '3) output_voids'
-    if (id == 0) write(*,*) '4) boxsize'
-    if (id == 0) write(*,*) '5) density_threshold'
-    if (id == 0) write(*,*) '6) rvoidmax'
-    if (id == 0) write(*,*) '7) ngrid'
+    if (iargc() .ne. 9) then
+    write(*,*) 'recentering.exe: some parameters are missing.'
+    write(*,*) ''
+    write(*,*) '1) input_tracers'
+    write(*,*) '2) input_centres'
+    write(*,*) '3) output_voids'
+    write(*,*) '4) boxsize'
+    write(*,*) '5) density_threshold'
+    write(*,*) '6) rvoidmax'
+    write(*,*) '7) ngrid'
+    write(*,*) '8) nthreads'
+    write(*,*) '9) use_weights'
     stop
-  end if
+    end if
 
-  call getarg(1, input_tracers)
-  call getarg(2, input_centres)
-  call getarg(3, output_voids)
-  call getarg(4, box_char)
-  call getarg(5, delta_char)
-  call getarg(6, rvoidmax_char)
-  call getarg(7, ngrid_char)
+    call getarg(1, input_tracers)
+    call getarg(2, input_centres)
+    call getarg(3, output_voids)
+    call getarg(4, box_char)
+    call getarg(5, delta_char)
+    call getarg(6, rvoidmax_char)
+    call getarg(7, ngrid_char)
+    call getarg(8, nthreads_char)
+    call getarg(9, use_weights_char)
 
-  read(box_char, *) boxsize
-  read(rvoidmax_char, *) rvoidmax
-  read(delta_char, *) delta
-  read(ngrid_char, *) ngrid
+    read(box_char, *) boxsize
+    read(rvoidmax_char, *) rvoidmax
+    read(delta_char, *) delta
+    read(ngrid_char, *) ngrid
+    read(nthreads_char, *) nthreads
+    read(use_weights_char, *) use_weights
 
 
-  if (id == 0) write(*,*) '-----------------------'
-  if (id == 0) write(*,*) 'Running recentering.exe'
-  if (id == 0) write(*,*) 'Input parameters:'
-  if (id == 0) write(*,*) ''
-  if (id == 0) write(*,*) 'mpi_processes: ', process_num
-  if (id == 0) write(*,*) 'input_tracers: ', trim(input_tracers)
-  if (id == 0) write(*,*) 'input_centres: ', trim(input_centres)
-  if (id == 0) write(*,*) 'output_voids: ', trim(output_voids)
-  if (id == 0) write(*,*) 'boxsize: ', trim(box_char), ' Mpc/h'
-  if (id == 0) write(*,*) 'rvoidmax: ', trim(rvoidmax_char), ' Mpc/h'
-  if (id == 0) write(*,*) 'density_threshold: ', trim(delta_char), ' * rho_mean'
-  if (id == 0) write(*,*) 'random_centres: ', nrc
-  if (id == 0) write(*,*) 'ngrid: ', ngrid, ' Mpc/h'
-  if (id == 0) write(*,*) ''
+    write(*,*) '-----------------------'
+    write(*,*) 'Running recentering.exe'
+    write(*,*) 'Input parameters:'
+    write(*,*) ''
+    write(*,*) 'input_tracers: ', trim(input_tracers)
+    write(*,*) 'input_centres: ', trim(input_centres)
+    write(*,*) 'output_voids: ', trim(output_voids)
+    write(*,*) 'boxsize: ', trim(box_char), ' Mpc/h'
+    write(*,*) 'rvoidmax: ', trim(rvoidmax_char), ' Mpc/h'
+    write(*,*) 'density_threshold: ', trim(delta_char), ' * mean_density'
+    write(*,*) 'random_centres: ', nrc
+    write(*,*) 'ngrid: ', ngrid, ' Mpc/h'
+    write(*,*) ''
 
-  if (process_num .gt. 1) then
-    output_voids = trim(output_voids) // '.' // trim(str(id))
-  end if
+    if (use_weights == 1) then
+        call read_catalogue_type6(input_tracers, tracers, weight_tracers, ng)
+    else
+        call read_catalogue_type5(input_tracers, tracers, weight_tracers, ng)
+    end if 
 
-  open(10, file=input_tracers, status='old', form='unformatted')
-  read(10) nrows
-  read(10) ncols
-  allocate(pos_data(ncols, nrows))
-  read(10) pos_data
-  close(10)
-  ng = nrows
-  if (id == 0) write(*,*) 'ntracers: ', ng
+    call count_rows_ascii(input_centres, nc)
 
-  open(11, file=input_centres, status='old')
-  nc = 0
-  do
-    read(11, *, end=11)
-    nc = nc + 1
-  end do
-  11 rewind(11)
-  if (id == 0) write(*,*) 'n_centres: ', nc
-  if (id == 0) write(*,*) ''
+    allocate(voids(6, nc))
+    allocate(ll(ng))
+    allocate(lirst(ngrid, ngrid, ngrid))
+    call linked_list(tracers, boxsize, ngrid, ll, lirst, rgrid)
 
-  
-  rho_mean = ng * 1./(boxsize ** 3)
-  rgrid = boxsize / ngrid
-  ndif = int(rvoidmax / rgrid + 1.)
-  rwidth = rvoidmax / nrbin
+    mean_density = ng * 1./(boxsize ** 3)
+    rgrid = boxsize / ngrid
+    ndif = int(rvoidmax / rgrid + 1.)
+    rwidth = rvoidmax / nrbin
+    rvoidmax2 = rvoidmax ** 2
+    box2 = boxsize / 2
+    nv = 0
+    voids = 0
+    open(11, file=input_centres, status='old')
 
-  allocate(ll(ng))
-  allocate(lirst(ngrid, ngrid, ngrid))
-  call linked_list(ngrid, rgrid, ll, lirst, pos_data)
+    call OMP_SET_NUM_THREADS(nthreads)
+    write(*, *) 'Maximum number of threads: ', OMP_GET_MAX_THREADS()
 
-  filenumber = id + 20
-  open(filenumber, file=output_voids, status='unknown')
-  nv = 0
+  !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, rbin, cum_rbin, &
+  !$OMP ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, &
+  !$OMP rnd_vol, nden, ng, rnd_px, rnd_py, rnd_pz, pxr, pyr, pzr, rvoidr, &
+  !$OMP rnd_phi, rnd_theta, px, py, pz, stuck) REDUCTION(+:nv)
   do i = 1, nc
     read(11,*) px, py, pz, rvoid, ng, nden
 
@@ -166,13 +114,6 @@ PROGRAM recentering
     pyr = py
     pzr = pz
     rvoidr = rvoid
-
-    ! if (id == 0 .and. mod(i, int(1e2)) .eq. 1) then
-    !   write(*, 101, advance='no' ) creturn , i , nc
-    !   101 format(a , 'Centre ', i10 ,' out of', i10)
-    ! end if
-
-    if(mod(i, process_num) .eq. id) then
 
       stuck = 0
       do j = 1, nrc
@@ -206,7 +147,7 @@ PROGRAM recentering
           do iy = ipy - ndif, ipy + ndif, 1
             do iz = ipz - ndif, ipz + ndif, 1
 
-              if (sqrt(real((ix-ipx)**2 +(iy-ipy)**2+(iz-ipz)**2)).gt.ndif+1) cycle
+              if (real((ix - ipx)**2 + (iy - ipy)**2 + (iz - ipz)**2) .gt. (ndif + 1)**2) cycle
 
               ix2 = ix
               iy2 = iy
@@ -224,20 +165,21 @@ PROGRAM recentering
                 do
                   ii = ll(ii)
 
-                  disx = pos_data(1, ii) - rnd_px
-                  disy = pos_data(2, ii) - rnd_py
-                  disz = pos_data(3, ii) - rnd_pz
+                  disx = tracers(1, ii) - rnd_px
+                  disy = tracers(2, ii) - rnd_py
+                  disz = tracers(3, ii) - rnd_pz
 
-                  if (disx .lt. -boxsize/2) disx = disx + boxsize
-                  if (disx .gt. boxsize/2) disx = disx - boxsize
-                  if (disy .lt. -boxsize/2) disy = disy + boxsize
-                  if (disy .gt. boxsize/2) disy = disy - boxsize
-                  if (disz .lt. -boxsize/2) disz = disz + boxsize
-                  if (disz .gt. boxsize/2) disz = disz - boxsize
+                  if (disx .lt. -box2) disx = disx + boxsize
+                  if (disx .gt. box2) disx = disx - boxsize
+                  if (disy .lt. -box2) disy = disy + boxsize
+                  if (disy .gt. box2) disy = disy - boxsize
+                  if (disz .lt. -box2) disz = disz + boxsize
+                  if (disz .gt. box2) disz = disz - boxsize
 
-                  if (sqrt(disx ** 2 + disy ** 2 + disz ** 2)&
-                  & .lt. rvoidmax) then
-                    dis = sqrt(disx ** 2 + disy ** 2 + disz ** 2)
+                  dis2 = disx * disx + disy * disy + disz * disz
+
+                  if (dis2 .lt. rvoidmax2) then
+                    dis = sqrt(dis2)
                     rind = int(dis / rwidth + 1)
                     rbin(rind) = rbin(rind) + 1
                   end if
@@ -259,16 +201,17 @@ PROGRAM recentering
 
         do ii = nrbin, 1, -1
           rnd_rvoid = rwidth * ii
+          rnd_vol = 4./3 * pi * rvoid ** 3
           rnd_ng = int(cum_rbin(ii))
-          rnd_nden = cum_rbin(ii) / (4.e0/3.e0 * pi * rnd_rvoid ** 3)
-          if (rnd_nden .lt. delta * rho_mean .and. rnd_rvoid .gt. rvoid&
+          rnd_nden = cum_rbin(ii) / rnd_vol
+          if (rnd_nden .lt. delta * mean_density .and. rnd_rvoid .gt. rvoid&
           & .and. rnd_ng .gt. 0) then
             rvoid = rnd_rvoid
             px = rnd_px
             py = rnd_py
             pz = rnd_pz
             ng = rnd_ng
-            nden = rnd_nden / rho_mean
+            nden = rnd_nden / mean_density
             stuck = 0
             exit
           end if
@@ -278,17 +221,22 @@ PROGRAM recentering
 
       end do
 
-      write(filenumber, '(4F10.3, 1I10, 1F10.3)') px, py, pz, rvoid, ng, nden
+      voids(1, i) = px
+      voids(2, i) = py
+      voids(3, i) = pz
+      voids(4, i) = rvoid
+      voids(5, i) = ng
+      voids(6, i) = nden / mean_density
 
-    end if
   end do
+  !$OMP END PARALLEL DO
 
-  close(filenumber)
-  deallocate(pos_data)
+  deallocate(tracers)
 
-  if (id == 0) write(*,*) ''
-  if (id == 0) write(*,*) ''
-
-  call MPI_Finalize(ierr)
+  open(12, file=output_voids, status='unknown')
+  do i = 1, nc
+      write(12, '(4F10.3, 1I10, 1F10.3)') voids(1, i), voids(2, i),&
+      voids(3, i), voids(4, i), int(voids(5, i)), voids(6, i)
+  end do
 
 end PROGRAM recentering
