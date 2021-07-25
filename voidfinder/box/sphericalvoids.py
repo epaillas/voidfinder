@@ -113,7 +113,7 @@ def grow_spheres(
         str(rvoid_max),
         str(ngrid),
         str(nthreads),
-        str(use_weights,
+        str(use_weights),
         file_format)
     ]
 
