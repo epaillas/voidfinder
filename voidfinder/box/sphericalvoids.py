@@ -8,7 +8,7 @@ def grow_spheres(
         tracers_filename, handle, box_size,
         density_threshold, ngrid=None, rvoid_max=100,
         nthreads=1, void_centres='uniform', ncentres=None,
-        use_weights=False, file_format='ascii'
+        use_weights=False, tracers_fileformat='ascii'
 ):
     '''
     First step of the spherical void finder. Grows spheres
@@ -48,7 +48,7 @@ def grow_spheres(
                  Whether to use weights during pair counting. Defaults to
                  False.
 
-                 file_format: str
+                 tracers_fileformat: str
                  'ascii' for a text csv file, or 'unformatted' for a binary
                  Fortran 90 file.
                  '''
@@ -79,7 +79,7 @@ def grow_spheres(
     utilities.save_as_unformatted(centres, centres_filename)
 
     # figure out file format
-    if file_format not in ['ascii', 'unformatted']:
+    if tracers_fileformat not in ['ascii', 'unformatted']:
         raise ValueError('File format has to be either '
                          '"ascii" or "unformatted".')
 
@@ -114,7 +114,7 @@ def grow_spheres(
         str(ngrid),
         str(nthreads),
         str(use_weights),
-        file_format
+        tracers_fileformat
     ]
 
     log_filename = f'{handle}_growspheres.log'.format(handle)

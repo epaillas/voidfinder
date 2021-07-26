@@ -22,38 +22,38 @@ PROGRAM grow_spheres
     real*8, allocatable, dimension(:) :: weight_tracers, weight_centres
     real*8, dimension(nrbin) :: rbin, cum_rbin
 
-    character(len=500) :: input_tracers, input_centres, output_voids
+    character(len=500) :: tracers_filename, centres_filename, output_filename
     character(len=10) :: box_char, rvoidmax_char, delta_char, ngrid_char
-    character(len=10) :: nthreads_char, use_weights_char, file_format
+    character(len=20) :: nthreads_char, use_weights_char, tracers_fileformat
     character(len=1)  :: creturn = achar(13)
 
 
     if (iargc() .ne. 10) then
         write(*,*) 'grow_spheres.exe: some parameters are missing.'
         write(*,*) ''
-        write(*,*) '1) input_tracers'
-        write(*,*) '2) input_centres'
-        write(*,*) '3) output_voids'
+        write(*,*) '1) tracers_filename'
+        write(*,*) '2) centres_filename'
+        write(*,*) '3) output_filename'
         write(*,*) '4) boxsize'
         write(*,*) '5) density_threshold'
         write(*,*) '6) rvoidmax'
         write(*,*) '7) ngrid'
         write(*,*) '8) nthreads'
         write(*,*) '9) use_weights'
-        write(*,*) '10) file_format'
+        write(*,*) '10) tracers_fileformat'
         stop
     end if
 
-    call getarg(1, input_tracers)
-    call getarg(2, input_centres)
-    call getarg(3, output_voids)
+    call getarg(1, tracers_filename)
+    call getarg(2, centres_filename)
+    call getarg(3, output_filename)
     call getarg(4, box_char)
     call getarg(5, delta_char)
     call getarg(6, rvoidmax_char)
     call getarg(7, ngrid_char)
     call getarg(8, nthreads_char)
     call getarg(9, use_weights_char)
-    call getarg(10, file_format)
+    call getarg(10, tracers_fileformat)
 
     read(box_char, *) boxsize
     read(rvoidmax_char, *) rvoidmax
@@ -67,49 +67,50 @@ PROGRAM grow_spheres
     write(*,*) 'Running grow_spheres.exe'
     write(*,*) 'Input parameters:'
     write(*,*) ''
-    write(*,*) 'input_tracers: ', trim(input_tracers)
-    write(*,*) 'input_centres: ', trim(input_centres)
-    write(*,*) 'output_voids: ', trim(output_voids)
+    write(*,*) 'tracers_filename: ', trim(tracers_filename)
+    write(*,*) 'centres_filename: ', trim(centres_filename)
+    write(*,*) 'output_filename: ', trim(output_filename)
     write(*,*) 'boxsize: ', trim(box_char), ' Mpc/h'
     write(*,*) 'rvoidmax: ', trim(rvoidmax_char), ' Mpc/h'
     write(*,*) 'density_threshold: ', trim(delta_char), ' * mean_density'
     write(*,*) 'ngrid: ', ngrid
     write(*,*) 'nthreads: ', nthreads
     write(*,*) 'use_weights: ', use_weights
-    write(*,*) 'file_format : ', file_format
+    write(*,*) 'tracers_fileformat : ', tracers_fileformat
 
-
-    if (file_format == 'ascii') then
+    ! read tracers file
+    if (trim(tracers_fileformat) == 'ascii') then
         if (use_weights == 1) then
-            call read_catalogue_type2(input_tracers, tracers, weight_tracers, ng)
-            call read_catalogue_type2(input_centres, centres, weight_centres, nc)
+            call read_catalogue_type2(tracers_filename, tracers, weight_tracers, ng)
         else
-            call read_catalogue_type1(input_tracers, tracers, weight_tracers, ng)
-            call read_catalogue_type1(input_centres, centres, weight_centres, nc)
+            call read_catalogue_type1(tracers_filename, tracers, weight_tracers, ng)
         end if
     else
         if (use_weights == 1) then
-            call read_catalogue_type6(input_tracers, tracers, weight_tracers, ng)
-            call read_catalogue_type6(input_centres, centres, weight_centres, nc)
+            call read_catalogue_type6(tracers_filename, tracers, weight_tracers, ng)
         else
-            call read_catalogue_type5(input_tracers, tracers, weight_tracers, ng)
-            call read_catalogue_type5(input_centres, centres, weight_centres, nc)
+            call read_catalogue_type5(tracers_filename, tracers, weight_tracers, ng)
         end if
     end if
 
+    ! read centres file
+    call read_catalogue_type5(centres_filename, centres, weight_centres, nc)
 
-    allocate(voids(6, nc))
+    ! create linked list
     allocate(ll(ng))
     allocate(lirst(ngrid, ngrid, ngrid))
     call linked_list(tracers, boxsize, ngrid, ll, lirst, rgrid)
 
-    mean_density = ng * 1./(boxsize ** 3)
+    ! define useful variables
+    allocate(voids(6, nc))
+    mean_density = sum(weight_tracers) * 1./(boxsize ** 3)
     ndif = int(rvoidmax / rgrid + 1)
     rwidth = rvoidmax / nrbin
     rvoidmax2 = rvoidmax ** 2
     nv = 0
     voids = 0
 
+    ! call to OpenMP
     call OMP_SET_NUM_THREADS(nthreads)
     write(*, *) 'Maximum number of threads: ', OMP_GET_MAX_THREADS()
 
@@ -164,7 +165,7 @@ PROGRAM grow_spheres
                             if (dis2 .lt. rvoidmax2) then
                                 dis = sqrt(dis2)
                                 rind = int(dis / rwidth + 1)
-                                rbin(rind) = rbin(rind) + 1
+                                rbin(rind) = rbin(rind) + weight_tracers(ii)
                             end if
 
                             if (ii .eq. lirst(ix2, iy2, iz2)) exit
@@ -201,7 +202,7 @@ PROGRAM grow_spheres
     deallocate(tracers)
     deallocate(centres)
 
-    open(12, file=output_voids, status='unknown')
+    open(12, file=output_filename, status='unknown')
     do i = 1, nc
         if (voids(4, i) .ne. 0) then
             write(12, '(4F10.3, 1I10, 1F10.3)') voids(1, i), voids(2, i),&
