@@ -12,10 +12,10 @@ PROGRAM recentering
     real*8 :: pi = 4.*atan(1.)
 
     integer*8 :: ng, nc, nv, rind, stuck, nrows, ncols
-    integer*8 :: id, ierr, process_num, iargc, filenumber
+    integer*8 :: iargc, nshifts
     integer*8 :: i, j, k, ii, ix, iy, iz, ix2, iy2, iz2
     integer*8 :: ipx, ipy, ipz, ndif, ngrid, use_weights
-    integer*8, parameter ::  nrbin = 1000, nrc = 128
+    integer*8, parameter ::  nrbin = 1000
     integer*4 :: nthreads
 
     integer*8, dimension(:,:,:), allocatable :: lirst
@@ -25,16 +25,16 @@ PROGRAM recentering
     real*8, allocatable, dimension(:) :: weight_tracers
     real*8, dimension(nrbin) :: rbin, cum_rbin
 
-    character(len=500) :: input_tracers, input_centres, output_voids
+    character(len=500) :: tracers_filename, centres_filename, output_voids
     character(len=10) :: box_char, rvoidmax_char, delta_char, ngrid_char
-    character(len=10) :: nthreads_char, use_weights_char
-    character(len=1)  :: creturn = achar(13)
+    character(len=10) :: nthreads_char, use_weights_char, tracers_fileformat
+    character(len=10) :: nshifts_char
 
-    if (iargc() .ne. 9) then
+    if (iargc() .ne. 11) then
     write(*,*) 'recentering.exe: some parameters are missing.'
     write(*,*) ''
-    write(*,*) '1) input_tracers'
-    write(*,*) '2) input_centres'
+    write(*,*) '1) tracers_filename'
+    write(*,*) '2) centres_filename'
     write(*,*) '3) output_voids'
     write(*,*) '4) boxsize'
     write(*,*) '5) density_threshold'
@@ -42,11 +42,13 @@ PROGRAM recentering
     write(*,*) '7) ngrid'
     write(*,*) '8) nthreads'
     write(*,*) '9) use_weights'
+    write(*,*) '10) tracers_fileformat'
+    write(*,*) '11) nshifts'
     stop
     end if
 
-    call getarg(1, input_tracers)
-    call getarg(2, input_centres)
+    call getarg(1, tracers_filename)
+    call getarg(2, centres_filename)
     call getarg(3, output_voids)
     call getarg(4, box_char)
     call getarg(5, delta_char)
@@ -54,6 +56,8 @@ PROGRAM recentering
     call getarg(7, ngrid_char)
     call getarg(8, nthreads_char)
     call getarg(9, use_weights_char)
+    call getarg(10, tracers_fileformat)
+    call getarg(11, nshifts_char)
 
     read(box_char, *) boxsize
     read(rvoidmax_char, *) rvoidmax
@@ -61,35 +65,48 @@ PROGRAM recentering
     read(ngrid_char, *) ngrid
     read(nthreads_char, *) nthreads
     read(use_weights_char, *) use_weights
+    read(nshifts_char, *) nshifts
 
 
     write(*,*) '-----------------------'
     write(*,*) 'Running recentering.exe'
     write(*,*) 'Input parameters:'
     write(*,*) ''
-    write(*,*) 'input_tracers: ', trim(input_tracers)
-    write(*,*) 'input_centres: ', trim(input_centres)
+    write(*,*) 'tracers_filename: ', trim(tracers_filename)
+    write(*,*) 'centres_filename: ', trim(centres_filename)
     write(*,*) 'output_voids: ', trim(output_voids)
     write(*,*) 'boxsize: ', trim(box_char), ' Mpc/h'
     write(*,*) 'rvoidmax: ', trim(rvoidmax_char), ' Mpc/h'
     write(*,*) 'density_threshold: ', trim(delta_char), ' * mean_density'
-    write(*,*) 'random_centres: ', nrc
+    write(*,*) 'random_centres: ', nshifts
     write(*,*) 'ngrid: ', ngrid, ' Mpc/h'
     write(*,*) ''
 
-    if (use_weights == 1) then
-        call read_catalogue_type6(input_tracers, tracers, weight_tracers, ng)
+    ! read tracers file
+    if (trim(tracers_fileformat) == 'ascii') then
+        if (use_weights == 1) then
+            call read_catalogue_type2(tracers_filename, tracers, weight_tracers, ng)
+        else
+            call read_catalogue_type1(tracers_filename, tracers, weight_tracers, ng)
+        end if
     else
-        call read_catalogue_type5(input_tracers, tracers, weight_tracers, ng)
-    end if 
+        if (use_weights == 1) then
+            call read_catalogue_type6(tracers_filename, tracers, weight_tracers, ng)
+        else
+            call read_catalogue_type5(tracers_filename, tracers, weight_tracers, ng)
+        end if
+    end if
 
-    call count_rows_ascii(input_centres, nc)
+    ! read centres file
+    call count_rows_ascii(centres_filename, nc)
 
-    allocate(voids(6, nc))
+    ! create linked list
     allocate(ll(ng))
     allocate(lirst(ngrid, ngrid, ngrid))
     call linked_list(tracers, boxsize, ngrid, ll, lirst, rgrid)
 
+    ! declare useful variables
+    allocate(voids(6, nc))
     mean_density = ng * 1./(boxsize ** 3)
     rgrid = boxsize / ngrid
     ndif = int(rvoidmax / rgrid + 1.)
@@ -98,138 +115,143 @@ PROGRAM recentering
     box2 = boxsize / 2
     nv = 0
     voids = 0
-    open(11, file=input_centres, status='old')
+    open(11, file=centres_filename, status='old')
 
+    write(*,*) mean_density, rgrid, ndif, rwidth, rvoidmax2
+
+    ! call to OpenMP
     call OMP_SET_NUM_THREADS(nthreads)
     write(*, *) 'Maximum number of threads: ', OMP_GET_MAX_THREADS()
 
-  !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, rbin, cum_rbin, &
-  !$OMP ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, &
-  !$OMP rnd_vol, nden, ng, rnd_px, rnd_py, rnd_pz, pxr, pyr, pzr, rvoidr, &
-  !$OMP rnd_phi, rnd_theta, px, py, pz, stuck) REDUCTION(+:nv)
-  do i = 1, nc
-    read(11,*) px, py, pz, rvoid, ng, nden
 
-    pxr = px
-    pyr = py
-    pzr = pz
-    rvoidr = rvoid
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i, ii, j, rbin, cum_rbin, &
+    !$OMP ix, iy, iz, ipx, ipy, ipz, ix2, iy2, iz2, dis2, dis, rvoid, &
+    !$OMP nden, ng, rnd_px, rnd, rnd_py, rnd_pz, pxr, pyr, pzr, rvoidr, &
+    !$OMP rnd_phi, rnd_theta, px, py, pz, stuck, rnd_rvoid, rnd_ng, rnd_vol, &
+    !$OMP rnd_nden, disx, disy, disz, rind) REDUCTION(+:nv)
+    do i = 1, nc
+        read(11,*) px, py, pz, rvoid, ng, nden
 
-      stuck = 0
-      do j = 1, nrc
-        rbin = 0
-        cum_rbin = 0
+        pxr = px
+        pyr = py
+        pzr = pz
+        rvoidr = rvoid
 
-        call random_number(rnd)
-        rnd_phi = rnd * 2 * pi
-        call random_number(rnd)
-        rnd_theta = acos(rnd * 2 - 1)
+        stuck = 0
+        do j = 1, nshifts
+            rbin = 0
+            cum_rbin = 0
 
-        rnd_px = rvoid/4 * sin(rnd_theta) * cos(rnd_phi) + px
-        rnd_py = rvoid/4 * sin(rnd_theta) * sin(rnd_phi) + py
-        rnd_pz = rvoid/4 * cos(rnd_theta) + pz
+            call random_number(rnd)
+            rnd_phi = rnd * 2 * pi
+            call random_number(rnd)
+            rnd_theta = acos(rnd * 2 - 1)
 
-        if (sqrt((rnd_px-pxr)**2 + (rnd_py-pyr)**2 + (rnd_pz-pzr)**2 )&
-        & .gt. rvoidr) cycle
+            rnd_px = rvoid/4 * sin(rnd_theta) * cos(rnd_phi) + px
+            rnd_py = rvoid/4 * sin(rnd_theta) * sin(rnd_phi) + py
+            rnd_pz = rvoid/4 * cos(rnd_theta) + pz
 
-        if (rnd_px .lt. 0) rnd_px = rnd_px + boxsize
-        if (rnd_px .gt. boxsize) rnd_px = rnd_px - boxsize
-        if (rnd_py .lt. 0) rnd_py = rnd_py + boxsize
-        if (rnd_py .gt. boxsize) rnd_py = rnd_py - boxsize
-        if (rnd_pz .lt. 0) rnd_pz = rnd_pz + boxsize
-        if (rnd_pz .gt. boxsize) rnd_pz = rnd_pz - boxsize
+            if (sqrt((rnd_px-pxr)**2 + (rnd_py-pyr)**2 + (rnd_pz-pzr)**2 )&
+            & .gt. rvoidr) cycle
 
-        ipx = int(rnd_px / rgrid + 1.)
-        ipy = int(rnd_py / rgrid + 1.)
-        ipz = int(rnd_pz / rgrid + 1.)
+            if (rnd_px .lt. 0) rnd_px = rnd_px + boxsize
+            if (rnd_px .gt. boxsize) rnd_px = rnd_px - boxsize
+            if (rnd_py .lt. 0) rnd_py = rnd_py + boxsize
+            if (rnd_py .gt. boxsize) rnd_py = rnd_py - boxsize
+            if (rnd_pz .lt. 0) rnd_pz = rnd_pz + boxsize
+            if (rnd_pz .gt. boxsize) rnd_pz = rnd_pz - boxsize
 
-        do ix = ipx - ndif, ipx + ndif, 1
-          do iy = ipy - ndif, ipy + ndif, 1
-            do iz = ipz - ndif, ipz + ndif, 1
+            ipx = int(rnd_px / rgrid + 1.)
+            ipy = int(rnd_py / rgrid + 1.)
+            ipz = int(rnd_pz / rgrid + 1.)
 
-              if (real((ix - ipx)**2 + (iy - ipy)**2 + (iz - ipz)**2) .gt. (ndif + 1)**2) cycle
+            do ix = ipx - ndif, ipx + ndif, 1
+                do iy = ipy - ndif, ipy + ndif, 1
+                    do iz = ipz - ndif, ipz + ndif, 1
 
-              ix2 = ix
-              iy2 = iy
-              iz2 = iz
+                        if (real((ix - ipx)**2 + (iy - ipy)**2 + (iz - ipz)**2) .gt. (ndif + 1)**2) cycle
 
-              if (ix2 .gt. ngrid) ix2 = ix2 - ngrid
-              if (ix2 .lt. 1) ix2 = ix2 + ngrid
-              if (iy2 .gt. ngrid) iy2 = iy2 - ngrid
-              if (iy2 .lt. 1) iy2 = iy2 + ngrid
-              if (iz2 .gt. ngrid) iz2 = iz2 - ngrid
-              if (iz2 .lt. 1) iz2 = iz2 + ngrid
+                        ix2 = ix
+                        iy2 = iy
+                        iz2 = iz
 
-              ii = lirst(ix2, iy2, iz2)
-              if (ii .ne. 0) then
-                do
-                  ii = ll(ii)
+                        if (ix2 .gt. ngrid) ix2 = ix2 - ngrid
+                        if (ix2 .lt. 1) ix2 = ix2 + ngrid
+                        if (iy2 .gt. ngrid) iy2 = iy2 - ngrid
+                        if (iy2 .lt. 1) iy2 = iy2 + ngrid
+                        if (iz2 .gt. ngrid) iz2 = iz2 - ngrid
+                        if (iz2 .lt. 1) iz2 = iz2 + ngrid
 
-                  disx = tracers(1, ii) - rnd_px
-                  disy = tracers(2, ii) - rnd_py
-                  disz = tracers(3, ii) - rnd_pz
 
-                  if (disx .lt. -box2) disx = disx + boxsize
-                  if (disx .gt. box2) disx = disx - boxsize
-                  if (disy .lt. -box2) disy = disy + boxsize
-                  if (disy .gt. box2) disy = disy - boxsize
-                  if (disz .lt. -box2) disz = disz + boxsize
-                  if (disz .gt. box2) disz = disz - boxsize
+                        ii = lirst(ix2, iy2, iz2)
+                        if (ii .ne. 0) then
+                            do
+                                ii = ll(ii)
 
-                  dis2 = disx * disx + disy * disy + disz * disz
+                                disx = tracers(1, ii) - rnd_px
+                                disy = tracers(2, ii) - rnd_py
+                                disz = tracers(3, ii) - rnd_pz
 
-                  if (dis2 .lt. rvoidmax2) then
-                    dis = sqrt(dis2)
-                    rind = int(dis / rwidth + 1)
-                    rbin(rind) = rbin(rind) + 1
-                  end if
+                                if (disx .lt. -box2) disx = disx + boxsize
+                                if (disx .gt. box2) disx = disx - boxsize
+                                if (disy .lt. -box2) disy = disy + boxsize
+                                if (disy .gt. box2) disy = disy - boxsize
+                                if (disz .lt. -box2) disz = disz + boxsize
+                                if (disz .gt. box2) disz = disz - boxsize
 
-                  if (ii .eq. lirst(ix2, iy2, iz2)) exit
+                                dis2 = disx * disx + disy * disy + disz * disz
+
+                                if (dis2 .lt. rvoidmax2) then
+                                    dis = sqrt(dis2)
+                                    rind = int(dis / rwidth + 1)
+                                    rbin(rind) = rbin(rind) + weight_tracers(ii)
+                                end if
+
+                                if (ii .eq. lirst(ix2, iy2, iz2)) exit
+                            end do
+                        end if
+                    end do
                 end do
-              end if
-
             end do
-          end do
+
+            stuck = stuck + 1
+
+            cum_rbin(1) = rbin(1)
+            do ii = 2, nrbin
+                cum_rbin(ii) =  cum_rbin(ii - 1) + rbin(ii)
+                end do
+
+            do ii = nrbin, 1, -1
+                rnd_rvoid = rwidth * ii
+                rnd_vol = 4./3 * pi * rnd_rvoid ** 3
+                rnd_ng = int(cum_rbin(ii))
+                rnd_nden = cum_rbin(ii) / rnd_vol
+                if (rnd_nden .lt. delta * mean_density .and. rnd_rvoid .gt. rvoid&
+                    & .and. rnd_ng .gt. 0) then
+                    rvoid = rnd_rvoid
+                    px = rnd_px
+                    py = rnd_py
+                    pz = rnd_pz
+                    ng = rnd_ng
+                    nden = rnd_nden / mean_density
+                    stuck = 0
+                    exit
+                end if
+            end do
+
+            if (stuck .gt. 64) exit
+
         end do
 
-        stuck = stuck + 1
+        voids(1, i) = px
+        voids(2, i) = py
+        voids(3, i) = pz
+        voids(4, i) = rvoid
+        voids(5, i) = ng
+        voids(6, i) = nden / mean_density
 
-        cum_rbin(1) = rbin(1)
-        do ii = 2, nrbin
-          cum_rbin(ii) =  cum_rbin(ii - 1) + rbin(ii)
-        end do
-
-        do ii = nrbin, 1, -1
-          rnd_rvoid = rwidth * ii
-          rnd_vol = 4./3 * pi * rvoid ** 3
-          rnd_ng = int(cum_rbin(ii))
-          rnd_nden = cum_rbin(ii) / rnd_vol
-          if (rnd_nden .lt. delta * mean_density .and. rnd_rvoid .gt. rvoid&
-          & .and. rnd_ng .gt. 0) then
-            rvoid = rnd_rvoid
-            px = rnd_px
-            py = rnd_py
-            pz = rnd_pz
-            ng = rnd_ng
-            nden = rnd_nden / mean_density
-            stuck = 0
-            exit
-          end if
-        end do
-
-        if (stuck .gt. 64) exit
-
-      end do
-
-      voids(1, i) = px
-      voids(2, i) = py
-      voids(3, i) = pz
-      voids(4, i) = rvoid
-      voids(5, i) = ng
-      voids(6, i) = nden / mean_density
-
-  end do
-  !$OMP END PARALLEL DO
+    end do
+    !$OMP END PARALLEL DO
 
   deallocate(tracers)
 

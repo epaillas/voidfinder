@@ -8,21 +8,18 @@ def grow_spheres(
         tracers_filename, handle, box_size,
         density_threshold, ngrid=None, rvoid_max=100,
         nthreads=1, void_centres='uniform', ncentres=None,
-        use_weights=False, tracers_fileformat='ascii'
+        use_weights=False, tracers_fileformat='unformatted'
 ):
     '''
     First step of the spherical void finder. Grows spheres
     that satisfy a certain density_threshold from a set of
     input centres.
 
-    Parameters:  centres_filename: str
-                 Name of file unformatted file containing input centres.
+    Parameters:  tracers_filename: str
+                 Name of file file containing tracers.
 
-                 tracers_filename: str
-                 Name of unformatted file file containing tracers.
-
-                 output_filename: str
-                 Name of output file that will contain the void catalogue.
+                 handle: str
+                 Handle string for this run.
 
                  box_size: float
                  Size of the simulation box.
@@ -78,7 +75,7 @@ def grow_spheres(
                          '"uniform" or "delaunay".')
     utilities.save_as_unformatted(centres, centres_filename)
 
-    # figure out file format
+    # check file format
     if tracers_fileformat not in ['ascii', 'unformatted']:
         raise ValueError('File format has to be either '
                          '"ascii" or "unformatted".')
@@ -127,6 +124,115 @@ def grow_spheres(
                            'Check log file for further information.')
 
     voids = np.genfromtxt(voids_filename)
+
+    return voids
+
+
+def recentre_spheres(
+        tracers_filename, voids_filename, handle,
+        box_size, density_threshold, ngrid=None,
+        rvoid_max=100, nthreads=1, ncentres=None,
+        use_weights=False, tracers_fileformat='ascii',
+        nshifts=128
+):
+    '''
+    Second step of the spherical void finder. Recentres the
+    voids by shifting their original positions and verifying
+    if they can grow more.
+
+    Parameters:  tracers_filename: str
+                 Name of file file containing tracers.
+
+                 voids_filename: str
+                 Name of the file containing the voids to recentre.
+
+                 handle: str
+                 Handle string for this run.
+
+                 box_size: float
+                 Size of the simulation box.
+
+                 density_threshold: float
+                 Density threshold, in units of the mean density (e.g. 0.2).
+
+                 ngrid: int
+                 Number of cells along 1D for the linked lists. If None,
+                 the divisor of box_size that is closest to 100 is used.
+
+                 rvoid_max: float
+                 Maxiumum radius a void can have (defaults to 100 Mpc/h).
+
+                 nthreads: int
+                 Number of threads to speed up calculations (defaults to 1).
+
+                 use_weights: boolean
+                 Whether to use weights during pair counting. Defaults to
+                 False.
+
+                 tracers_fileformat: str
+                 'ascii' for a text csv file, or 'unformatted' for a binary
+                 Fortran 90 file.
+
+                 nshifts: int
+                 Number of random shifts that should be explored around the
+                 the original void centres. Defaults to 128.
+                 '''
+
+    # check if files exist
+    for fname in [tracers_filename, voids_filename]:
+        if not path.isfile(fname):
+            raise FileNotFoundError('{} does not exist.'.format(fname))
+
+    # check file format
+    if tracers_fileformat not in ['ascii', 'unformatted']:
+        raise ValueError('File format has to be either '
+                         '"ascii" or "unformatted".')
+
+    # figure out size of linked list
+    if ngrid is None:
+        ngrid = utilities.get_closest_divisor(box_size, 100)
+    else:
+        if type(ngrid) != int:
+            raise ValueError('ngrid needs to be an integer.')
+        if box_size % ngrid != 0:
+            raise ValueError('ngrid needs to be a divisor of box_size.')
+
+    # recentre spheres
+    binpath = path.join(path.dirname(__file__),
+                        'bin', 'recentring.exe')
+
+    recentred_filename = f'{handle}_recentred_voids.dat'
+
+    if use_weights is True:
+        use_weights = 1
+    else:
+        use_weights = 0
+
+    cmd = [
+        binpath,
+        tracers_filename,
+        voids_filename,
+        recentred_filename,
+        str(box_size),
+        str(density_threshold),
+        str(rvoid_max),
+        str(ngrid),
+        str(nthreads),
+        str(use_weights),
+        tracers_fileformat,
+        str(nshifts)
+    ]
+
+    log_filename = f'{handle}_recentring.log'.format(handle)
+    log = open(log_filename, 'w+')
+
+    return_code = subprocess.call(cmd, stdout=log, stderr=log)
+
+    if return_code:
+        raise RuntimeError('recentring.exe failed. '
+                           'Check log file for further information.')
+
+    voids = np.genfromtxt(recentred_filename)
 
     return voids
 

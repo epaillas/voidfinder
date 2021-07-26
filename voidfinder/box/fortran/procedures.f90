@@ -77,6 +77,7 @@ contains
 
         ! read data
         allocate(datarray(3, ndata))
+        allocate(weight(ndata))
         open(10, file=input_filename, status='old')
         do i = 1, ndata
             read(10, *) datarray(:, i) 
@@ -106,11 +107,14 @@ contains
 
         ! read data
         allocate(datarray(4, ndata))
+        allocate(weight(ndata))
         open(10, file=input_filename, status='old')
         do i = 1, ndata
             read(10, *) datarray(:, i) 
         end do
         close(10)
+
+        weight = datarray(4, :)
 
     end subroutine read_catalogue_type2
 
@@ -131,6 +135,7 @@ contains
 
         ! read data
         allocate(datarray(6, ndata))
+        allocate(weight(ndata))
         open(10, file=input_filename, status='old')
         do i = 1, ndata
             read(10, *) datarray(:, i) 
@@ -160,11 +165,14 @@ contains
 
         ! read data
         allocate(datarray(7, ndata))
+        allocate(weight(ndata))
         open(10, file=input_filename, status='old')
         do i = 1, ndata
             read(10, *) datarray(:, i) 
         end do
         close(10)
+
+        weight = datarray(7, :)
 
     end subroutine read_catalogue_type4
 

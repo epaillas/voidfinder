@@ -6,7 +6,7 @@ PROGRAM grow_spheres
     real*8 :: boxsize, delta, rgrid, mean_density, nden
     real*8 :: px, py, pz, disx, disy, disz, dis, dis2
     real*8 :: rvoid, rwidth, rvoidmax, rvoidmax2, vol
-    real*8 :: pi = 4.*atan(1.)
+    real*8 :: pi = 4.*atan(1.), box2
 
     integer*8 :: ng, nc, nv, rind, nrows, ncols
     integer*8 :: id, ierr, process_num, iargc, filenumber
@@ -107,6 +107,7 @@ PROGRAM grow_spheres
     ndif = int(rvoidmax / rgrid + 1)
     rwidth = rvoidmax / nrbin
     rvoidmax2 = rvoidmax ** 2
+    box2 = boxsize / 2
     nv = 0
     voids = 0
 
@@ -153,12 +154,12 @@ PROGRAM grow_spheres
                             disy = tracers(2, ii) - centres(2, i)
                             disz = tracers(3, ii) - centres(3, i)
 
-                            if (disx .lt. -boxsize/2) disx = disx + boxsize
-                            if (disx .gt. boxsize/2) disx = disx - boxsize
-                            if (disy .lt. -boxsize/2) disy = disy + boxsize
-                            if (disy .gt. boxsize/2) disy = disy - boxsize
-                            if (disz .lt. -boxsize/2) disz = disz + boxsize
-                            if (disz .gt. boxsize/2) disz = disz - boxsize
+                            if (disx .lt. -box2) disx = disx + boxsize
+                            if (disx .gt. box2) disx = disx - boxsize
+                            if (disy .lt. -box2) disy = disy + boxsize
+                            if (disy .gt. box2) disy = disy - boxsize
+                            if (disz .lt. -box2) disz = disz + boxsize
+                            if (disz .gt. box2) disz = disz - boxsize
 
                             dis2 = disx ** 2 + disy ** 2 + disz ** 2
 
