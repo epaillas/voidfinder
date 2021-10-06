@@ -1,0 +1,50 @@
+# Configuration file to identify spherical voids
+# in a periodic cosmological volume.
+
+# File containing tracers of the density field. You can specify
+# the format of the file: "ascii" files should have x, y and z
+# positions as the first # 3 columns, while "unformatted" files
+# can be generated with the save_as_unformatted utility
+# provided in the  package. If tracer weights are present, put
+# them in the 4th column, after the positions.
+tracers_filename: ""
+tracers_fileformat: "unformatted"
+
+# Density threshold rho/rho_mean that will be adopted for
+#  void definition. Commonly adopted values are 0.2 or 0.1.
+density_threshold: 0.2
+
+# Size of the simulation box
+box_size: 1024
+
+# method to generate initial seets from which
+# voids will try to be grown: "delaunay" or "uniform".
+# If "uniform" is selected, you can also specify the 
+# number of initial seeds "nseeds".
+seeds_method: "uniform"
+nseeds: null
+
+# Maximum possible radius for the voids. Need to specify this,
+# as otherwise the algorithm will try to fit unphysically large
+# voids that waste a lot of computational resources.
+rvoid_max: 100
+
+# Number of available threads for OpenMP parallelization.
+nthreads: 1
+
+# If True, tracers are used for pair counting in the void
+# idenfication.
+use_weights: True
+
+# Number of random shifts when trying to find the optimal 
+# void centres (AKA void re-centring). 64 is a reasonable value.
+nshifts: 64
+
+# Amount of overlap allowed between voids in the final catalogue.
+overlap_factor: 0.5
+
+# You can manually specify the size of the linked list that is 
+# used for efficient distance computation. If you don't specify
+# it, the program will find the best value for you.
+ngrid: null
+

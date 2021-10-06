@@ -96,6 +96,9 @@ PROGRAM grow_spheres
     ! read centres file
     call read_catalogue_type5(centres_filename, centres, weight_centres, nc)
 
+    write(*,*) 'ntracers: ', ng
+    write(*,*) 'nseeds: ', nc
+
     ! create linked list
     allocate(ll(ng))
     allocate(lirst(ngrid, ngrid, ngrid))

@@ -2,7 +2,7 @@ from scipy.spatial import Delaunay
 import numpy as np
 
 
-def get_circumcentres(vertices,  box_size, radius_limit=1000):
+def circumcentres(vertices,  box_size, radius_limit=1000):
     '''
     Find the centre of the circumspheres
     associated to an input catalogue of
@@ -37,12 +37,6 @@ def get_circumcentres(vertices,  box_size, radius_limit=1000):
     cenx = np.asarray(cenx)
     ceny = np.asarray(ceny)
     cenz = np.asarray(cenz)
-
-    print(box_size)
-    print(len(cenx))
-    print(cenx[:10])
-    print(ceny[:10])
-    print(cenz[:10])
 
     # keep only those centres inside the box
     in_box = ((cenx >= 0) & (cenx <= box_size) &
@@ -83,7 +77,7 @@ def delaunay_triangulation(
     return vertices
 
 
-def get_periodic_images(data, box_size):
+def periodic_images(data, box_size):
     '''
     Find the relevant images of a
     set of points in a box that
@@ -152,21 +146,21 @@ def get_periodic_images(data, box_size):
     return images
 
 
-def get_random_centres(ncentres, box_size):
+def random_seeds(nseeds, box_size):
     '''
     Generates random centres within the simulation
     volume following a uniform distribution.
 
-    Parameters:  ncentres: int
+    Parameters:  nseeds: int
                  Number of random centres.
 
                  box_size: float
                  Size of the simulation box
     '''
 
-    xpos = np.random.uniform(0, box_size, ncentres)
-    ypos = np.random.uniform(0, box_size, ncentres)
-    zpos = np.random.uniform(0, box_size, ncentres)
+    xpos = np.random.uniform(0, box_size, nseeds)
+    ypos = np.random.uniform(0, box_size, nseeds)
+    zpos = np.random.uniform(0, box_size, nseeds)
 
     centres = np.c_[xpos, ypos, zpos]
 

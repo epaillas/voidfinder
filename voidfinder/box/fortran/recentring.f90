@@ -248,7 +248,7 @@ PROGRAM recentering
         voids(3, i) = pz
         voids(4, i) = rvoid
         voids(5, i) = ng
-        voids(6, i) = nden / mean_density
+        voids(6, i) = nden
 
     end do
     !$OMP END PARALLEL DO
