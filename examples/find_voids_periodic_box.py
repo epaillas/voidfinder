@@ -1,3 +1,7 @@
-import voidfinder.box as vf
+from voidfinder.box import SphericalVoidFinder
 
-# TODO add an example using mock-generated data from numpy
+parameter_file = "find_voids_periodic_box.yaml"
+
+SVF = SphericalVoidFinder(parameter_file=parameter_file)
+
+SVF.full_pipeline()
