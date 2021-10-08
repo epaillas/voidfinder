@@ -68,7 +68,7 @@ def delaunay_triangulation(
     '''
 
     # add periodic images
-    images = get_periodic_images(data, box_size)
+    images = periodic_images(data, box_size)
     data = np.vstack([data, images])
 
     triangulation = Delaunay(data)
